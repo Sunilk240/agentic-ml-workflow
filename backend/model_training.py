@@ -11,6 +11,22 @@ from sklearn.metrics import accuracy_score, r2_score
 from helpers import DATAFRAME_CACHE, PIPELINE_STATE, get_dataset
 from config import Config
 
+def convert_numpy_types(obj):
+    """Convert numpy types to native Python types for JSON serialization"""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    else:
+        return obj
+
+
 @tool
 def execute_model_training(path: str, algorithm: str = "recommended") -> Dict[str, Any]:
     """
@@ -391,7 +407,9 @@ def execute_model_training(path: str, algorithm: str = "recommended") -> Dict[st
             "training_samples": int(len(X_train)),
             "test_samples": int(len(X_test)),
             "feature_count": int(X.shape[1]),
-            "target_distribution": {str(k): int(v) for k, v in target_series.value_counts().head(10).to_dict().items()} if problem_type == "classification" else {}
+            # "target_distribution": {str(k): int(v) for k, v in target_series.value_counts().head(10).to_dict().items()} if problem_type == "classification" else {}
+            "target_distribution": {str(k): int(v) for k, v in y.value_counts().head(10).to_dict().items()} if problem_type == "classification" else {}
+
         }
     }
 
@@ -674,7 +692,12 @@ def train_model(path: str, target_column: Optional[str] = None) -> Dict[str, Any
     }
 
     # Store detailed data for frontend
+    # PIPELINE_STATE["last_detailed_data"] = detailed_data
+    
+    # Before storing detailed data for frontend
+    detailed_data = convert_numpy_types(detailed_data)
     PIPELINE_STATE["last_detailed_data"] = detailed_data
+
 
     return {
         "analysis_complete": True,

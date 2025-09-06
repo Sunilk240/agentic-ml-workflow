@@ -9,6 +9,22 @@ from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bo
 from helpers import DATAFRAME_CACHE, PIPELINE_STATE, get_dataset
 from config import Config
 
+def convert_numpy_types(obj):
+    """Convert numpy types to native Python types for JSON serialization"""
+    import numpy as np
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    else:
+        return obj
+
 @tool
 def perform_clustering(path: str) -> Dict[str, Any]:
     """
@@ -272,6 +288,12 @@ def perform_clustering(path: str) -> Dict[str, Any]:
     }
 
     # Store detailed data for frontend
+    # PIPELINE_STATE["last_detailed_data"] = detailed_data
+
+    # Before storing detailed data, clean it
+    detailed_data = convert_numpy_types(detailed_data)
+
+    # Store detailed data for frontend
     PIPELINE_STATE["last_detailed_data"] = detailed_data
 
     return {
@@ -297,6 +319,8 @@ def execute_clustering(path: str, algorithm: str = "recommended", n_clusters: Op
     if len(numeric_cols) < 2:
         return {"error": "Need at least 2 numeric features for clustering"}
     
+    print("dataset loaded")
+
     X = df[numeric_cols].copy()
     
     # Handle missing values
@@ -307,6 +331,8 @@ def execute_clustering(path: str, algorithm: str = "recommended", n_clusters: Op
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     
+    print("reached step 2")
+
     # Determine optimal number of clusters if not specified
     if not n_clusters and algorithm != "dbscan":
         # Use elbow method to suggest optimal clusters
@@ -324,48 +350,154 @@ def execute_clustering(path: str, algorithm: str = "recommended", n_clusters: Op
         optimal_k = K_range[np.argmax(silhouette_scores)]
         n_clusters = optimal_k
     
-    # Define available clustering algorithms
-    algorithms_available = {}
+    print("2.1")
+
+    # # Define available clustering algorithms
+    # algorithms_available = {}
     
-    if algorithm == "kmeans" or algorithm is None:
-        algorithms_available["kmeans"] = KMeans(
+    # if algorithm == "kmeans" or algorithm is None:
+    #     algorithms_available["kmeans"] = KMeans(
+    #         n_clusters=n_clusters or 3, 
+    #         random_state=Config.RANDOM_STATE,
+    #         n_init=10
+    #     )
+    
+    # print("2.2")
+
+    # if algorithm == "hierarchical" or algorithm is None:
+    #     algorithms_available["hierarchical"] = AgglomerativeClustering(
+    #         n_clusters=n_clusters or 3
+    #     )
+    
+    # if algorithm == "dbscan" or algorithm is None:
+    #     algorithms_available["dbscan"] = DBSCAN(eps=0.5, min_samples=5)
+    
+    # if algorithm == "gaussian_mixture" or algorithm is None:
+    #     algorithms_available["gaussian_mixture"] = GaussianMixture(
+    #         n_components=n_clusters or 3,
+    #         random_state=Config.RANDOM_STATE
+    #     )
+    
+    # print("2.3")
+
+    # # Handle algorithm parameter - convert to lowercase and handle variations
+    # if algorithm:
+    #     algorithm = algorithm.lower()
+    #     if algorithm in ["k-means", "kmeans"]:
+    #         algorithm = "kmeans"
+    #     elif algorithm in ["k_means"]:
+    #         algorithm = "kmeans"
+    
+    # print("2.4")
+
+    # # # If specific algorithm requested, use only that one
+    # # if algorithm and algorithm in ["kmeans", "hierarchical", "dbscan", "gaussian_mixture"]:
+    # #     algorithms_to_run = {algorithm: algorithms_available[algorithm]}
+    # # else:
+    # #     # Run recommended algorithms
+    # #     algorithms_to_run = {
+    # #         "kmeans": algorithms_available["kmeans"],
+    # #         "hierarchical": algorithms_available["hierarchical"]
+    # #     }
+
+    # print("2.4")
+
+    # # Debug the algorithm selection process
+    # print(f"DEBUG: algorithm parameter = '{algorithm}'")
+    # print(f"DEBUG: algorithms_available keys = {list(algorithms_available.keys())}")
+
+    # try:
+    #    # If specific algorithm requested, use only that one
+    #     if algorithm and algorithm in ["kmeans", "hierarchical", "dbscan", "gaussian_mixture"]:
+    #         print(f"DEBUG: Specific algorithm '{algorithm}' requested")
+
+    #         if algorithm in algorithms_available:
+    #             print(f"DEBUG: Algorithm '{algorithm}' found in available algorithms")
+    #             algorithms_to_run = {algorithm: algorithms_available[algorithm]}
+    #         else:
+    #             print(f"ERROR: Algorithm '{algorithm}' not found in algorithms_available")
+    #             print(f"Available keys: {list(algorithms_available.keys())}")
+    #             return {"error": f"Algorithm '{algorithm}' not available"}
+            
+    #     else:
+    #         print("DEBUG: Using default algorithm set (kmeans + hierarchical)")
+        
+    #         # Check if required default algorithms exist
+    #         required_algorithms = ["kmeans", "hierarchical"]
+    #         missing_algorithms = [alg for alg in required_algorithms if alg not in algorithms_available]
+        
+    #         if missing_algorithms:
+    #             print(f"ERROR: Missing required default algorithms: {missing_algorithms}")
+    #             return {"error": f"Missing required algorithms: {missing_algorithms}"}
+        
+    #         algorithms_to_run = {
+    #             "kmeans": algorithms_available["kmeans"],
+    #             "hierarchical": algorithms_available["hierarchical"]
+    #         }
+    
+    #     print(f"DEBUG: algorithms_to_run keys = {list(algorithms_to_run.keys())}")
+        
+    #     print("reached step 3")
+
+    # except KeyError as e:
+    #     print(f"KeyError in algorithm selection: {e}")
+    #     return {"error": f"KeyError: {e}"}
+    # except Exception as e:
+    #     print(f"Unexpected error in algorithm selection: {e}")
+    #     return {"error": f"Algorithm selection error: {e}"}
+
+    
+    # # print("reached step 3")
+
+    print("reached step 2")
+
+    # ALWAYS build all algorithms with default parameters - no conditional logic
+    algorithms_available = {
+        "kmeans": KMeans(
             n_clusters=n_clusters or 3, 
             random_state=Config.RANDOM_STATE,
             n_init=10
-        )
-    
-    if algorithm == "hierarchical" or algorithm is None:
-        algorithms_available["hierarchical"] = AgglomerativeClustering(
+        ),
+        "hierarchical": AgglomerativeClustering(
             n_clusters=n_clusters or 3
-        )
-    
-    if algorithm == "dbscan" or algorithm is None:
-        algorithms_available["dbscan"] = DBSCAN(eps=0.5, min_samples=5)
-    
-    if algorithm == "gaussian_mixture" or algorithm is None:
-        algorithms_available["gaussian_mixture"] = GaussianMixture(
+        ),
+        "dbscan": DBSCAN(eps=0.5, min_samples=5),
+        "gaussian_mixture": GaussianMixture(
             n_components=n_clusters or 3,
             random_state=Config.RANDOM_STATE
         )
-    
-    # Handle algorithm parameter - convert to lowercase and handle variations
+    }
+
+    print(f"DEBUG: algorithms_available keys = {list(algorithms_available.keys())}")
+
+    # Handle algorithm parameter - normalize input
     if algorithm:
         algorithm = algorithm.lower()
-        if algorithm in ["k-means", "kmeans"]:
+        # Handle common variations
+        if algorithm in ["k-means", "k_means"]:
             algorithm = "kmeans"
-        elif algorithm in ["k_means"]:
-            algorithm = "kmeans"
-    
-    # If specific algorithm requested, use only that one
-    if algorithm and algorithm in ["kmeans", "hierarchical", "dbscan", "gaussian_mixture"]:
+
+    print("2.4")
+
+    # Algorithm selection with validation
+    if algorithm and algorithm in algorithms_available:
         algorithms_to_run = {algorithm: algorithms_available[algorithm]}
+        print(f"DEBUG: Running specific algorithm: {algorithm}")
+    elif algorithm:
+        # Invalid algorithm requested
+        available_list = list(algorithms_available.keys())
+        return {"error": f"Algorithm '{algorithm}' not supported. Available: {available_list}"}
     else:
-        # Run recommended algorithms
+        # No algorithm specified - use recommended defaults
         algorithms_to_run = {
             "kmeans": algorithms_available["kmeans"],
             "hierarchical": algorithms_available["hierarchical"]
         }
-    
+        print("DEBUG: Running recommended algorithms: kmeans, hierarchical")
+
+    print(f"DEBUG: algorithms_to_run keys = {list(algorithms_to_run.keys())}")
+    print("reached step 3")
+
     # Perform clustering
     results = {}
     for alg_name, clusterer in algorithms_to_run.items():
@@ -384,19 +516,29 @@ def execute_clustering(path: str, algorithm: str = "recommended", n_clusters: Op
                 silhouette = -1.0
                 calinski_harabasz = 0.0
             
-            results[alg_name] = {
-                "labels": labels.tolist() if hasattr(labels, 'tolist') else labels,
-                "n_clusters": int(n_clusters_found),
-                "silhouette_score": float(silhouette),
-                "calinski_harabasz_score": float(calinski_harabasz),
-                "model": clusterer
-            }
+            # results[alg_name] = {
+            #     "labels": labels.tolist() if hasattr(labels, 'tolist') else labels,
+            #     "n_clusters": int(n_clusters_found),
+            #     "silhouette_score": float(silhouette),
+            #     "calinski_harabasz_score": float(calinski_harabasz),
+            #     "model": clusterer
+            # }
             
+            results[alg_name] = {
+            "labels": labels.tolist() if hasattr(labels, 'tolist') else [int(x) for x in labels],
+            "n_clusters": int(n_clusters_found),
+            "silhouette_score": float(silhouette),
+            "calinski_harabasz_score": float(calinski_harabasz),
+            "model_for_analysis": clusterer  # Keep model only for analysis, don't serialize
+            }
+
         except Exception as e:
             results[alg_name] = {"error": str(e)}
     
     # Find best clustering result
     valid_results = {k: v for k, v in results.items() if "error" not in v and v["silhouette_score"] > 0}
+    
+    print("reached step 4")
     
     if valid_results:
         best_algorithm = max(valid_results.keys(), key=lambda k: valid_results[k]["silhouette_score"])
@@ -414,14 +556,38 @@ def execute_clustering(path: str, algorithm: str = "recommended", n_clusters: Op
     else:
         return {"error": "All clustering algorithms failed or produced poor results"}
     
-    # Store results
+    # # Store results
+    # PIPELINE_STATE["clustering_results"] = {
+    #     "algorithms": valid_results,
+    #     "best_algorithm": best_algorithm,
+    #     "best_labels": best_labels,
+    #     "features_used": numeric_cols,
+    #     "n_samples": len(X)
+    # }
+
+    print("reached step 5")
+    
+
+    # Store results (cleaned for serialization)
+    algorithms_summary = {}
+    for alg_name, result in valid_results.items():
+        if "error" not in result:
+            algorithms_summary[alg_name] = {
+                "labels": [int(x) for x in result["labels"]] if isinstance(result["labels"], list) else result["labels"],
+                "n_clusters": int(result["n_clusters"]),
+                "silhouette_score": float(result["silhouette_score"]),
+                "calinski_harabasz_score": float(result["calinski_harabasz_score"])
+                # Remove "model" key to avoid serialization issues
+            }
+
     PIPELINE_STATE["clustering_results"] = {
-        "algorithms": valid_results,
-        "best_algorithm": best_algorithm,
-        "best_labels": best_labels,
-        "features_used": numeric_cols,
-        "n_samples": len(X)
+        "algorithms": algorithms_summary,
+        "best_algorithm": str(best_algorithm),
+        "best_labels": [int(x) for x in best_labels],
+        "features_used": [str(col) for col in numeric_cols],
+        "n_samples": int(len(X))
     }
+
     
     # Format response
     response = "🎯 **Clustering Analysis Complete**\n\n"
@@ -458,10 +624,14 @@ def execute_clustering(path: str, algorithm: str = "recommended", n_clusters: Op
     from sklearn.decomposition import PCA
     from sklearn.metrics import davies_bouldin_score
     
+    # best_result = valid_results[best_algorithm]
+    # best_labels = best_result["labels"]
+    # best_model = best_result["model"]
+    
     best_result = valid_results[best_algorithm]
     best_labels = best_result["labels"]
-    best_model = best_result["model"]
-    
+    best_model = results[best_algorithm].get("model_for_analysis")  # Get from original results
+
     # Clustering results summary
     clustering_results = {
         "algorithm_used": str(best_algorithm),
@@ -637,14 +807,23 @@ def execute_clustering(path: str, algorithm: str = "recommended", n_clusters: Op
         "quality_metrics": quality_metrics,
         "cluster_characteristics": cluster_characteristics,
         "visualization_data": visualization_data,
+        # "algorithm_comparison": {
+        #     alg_name: {
+        #         "silhouette_score": float(result['silhouette_score']),
+        #         "n_clusters": int(result['n_clusters']),
+        #         "calinski_harabasz": float(result['calinski_harabasz_score'])
+        #     }
+        #     for alg_name, result in valid_results.items()
+        # },
         "algorithm_comparison": {
             alg_name: {
-                "silhouette_score": float(result['silhouette_score']),
-                "n_clusters": int(result['n_clusters']),
-                "calinski_harabasz": float(result['calinski_harabasz_score'])
-            }
-            for alg_name, result in valid_results.items()
-        },
+            "silhouette_score": float(result['silhouette_score']),
+            "n_clusters": int(result['n_clusters']),
+            "calinski_harabasz": float(result['calinski_harabasz_score'])
+        }
+    for alg_name, result in algorithms_summary.items()  # Use cleaned results
+},
+
         "data_summary": {
             "original_features": [str(col) for col in numeric_cols],
             "samples_clustered": int(len(df)),
